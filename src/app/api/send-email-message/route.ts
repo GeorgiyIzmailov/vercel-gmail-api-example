@@ -1,8 +1,17 @@
+import fs from "fs";
 import fsPromises from "fs/promises";
 import { gmail_v1, google } from "googleapis";
 import { NextRequest, NextResponse } from "next/server";
 
 const url = "https://api.inkeep.com/v0/chat_sessions/chat_results";
+
+// Load environment variables
+const CLIENT_ID = process.env.GCP_CLIENT_ID || "";
+const CLIENT_SECRET = process.env.GCP_CLIENT_SECRET || "";
+const REDIRECT_URI = process.env.GCP_REDIRECT_URI || "";
+
+const INKEEP_INTEGRATION_ID = process.env.INKEEP_INTEGRATION_ID || "";
+const INKEEP_API_KEY = process.env.INKEEP_API_KEY || "";
 
 const getEmailTemplate = (replyEmailBody: string) =>
   `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -115,14 +124,6 @@ const getEmailTemplate = (replyEmailBody: string) =>
     </body>
   </html>`;
 
-// Load environment variables
-const CLIENT_ID = process.env.GCP_CLIENT_ID || "";
-const CLIENT_SECRET = process.env.GCP_CLIENT_SECRET || "";
-const REDIRECT_URI = process.env.GCP_REDIRECT_URI || "";
-
-const INKEEP_INTEGRATION_ID = process.env.INKEEP_INTEGRATION_ID || "";
-const INKEEP_API_KEY = process.env.INKEEP_API_KEY || "";
-
 // Function to get AI response from email body and subject
 const getResponseFromAI = async (emailBody: string, emailSubject: string) => {
   if (!INKEEP_API_KEY || !INKEEP_INTEGRATION_ID) {
@@ -175,27 +176,58 @@ const getResponseFromAI = async (emailBody: string, emailSubject: string) => {
   return responseFromAIMessage.message.content;
 };
 
-// Function to get email message details
-const getEmail = async (gmail: gmail_v1.Gmail) => {
+const setEmailMessageId = async (messageId: string | null | undefined) => {
   try {
-    const emailMessagesList = await gmail.users.messages.list({
-      userId: "me",
-      labelIds: ["INBOX"],
-      maxResults: 1,
+    const payload = JSON.stringify({
+      prevMessageID: messageId,
     });
+    fs.writeFileSync("./message-options.json", payload);
+    console.log("Message ID updated:", messageId);
+  } catch (error) {
+    console.error(error);
+    return new NextResponse(null, {
+      status: 400,
+      statusText: "Error writing message options",
+    });
+  }
+};
 
-    const messages = emailMessagesList.data?.messages;
-    const messageId = messages?.map((message) => message.id);
+const getEmailMessageId = async () => {
+  try {
+    const messageOptions = await fsPromises.readFile("./message-options.json");
+    const { prevMessageID } = JSON.parse(messageOptions?.toString() || '{}');
+
+    return prevMessageID;
+  } catch (error) {
+    console.error(error);
+    return new NextResponse(null, {
+      status: 400,
+      statusText: "Error reading message options",
+    });
+  }
+};
+
+// Function to get email message details
+const getEmailMessage = async (gmail: gmail_v1.Gmail) => {
+  const emailMessagesList = await gmail.users.messages.list({
+    userId: "me",
+    labelIds: ["INBOX"],
+    maxResults: 1,
+  });
+  const messages = emailMessagesList.data?.messages || [];
+
+  const newMessageId = messages[0].id;
+  const prevMessageId = await getEmailMessageId();
+
+  if (prevMessageId !== newMessageId) {
+    await setEmailMessageId(newMessageId);
 
     const emailMessage = await gmail.users.messages.get({
       userId: "me",
-      id: `${messageId?.length && messageId[0]}`,
+      id: `${newMessageId}`,
     });
 
     return emailMessage.data;
-  } catch (error) {
-    console.error(error);
-    throw new Error("Failed to retrieve emails");
   }
 };
 
@@ -207,7 +239,18 @@ const emailMessageOptions = (headers: gmail_v1.Schema$MessagePartHeader[]) => {
   headers?.forEach((header) => {
     if (header.name === "Subject") subject = header.value;
 
-    if (header.name === "From") emailTo = header.value;
+    if (header.name === "From") {
+      const email = header.value;
+      const foundSupportEmail = email?.match(
+        /georgiy-izmailov-v@[A-Za-z0-9.-]+.(com)/g
+      );
+
+      if (!foundSupportEmail?.length) {
+        throw new Error("Not found support email");
+      }
+
+      emailTo = foundSupportEmail[0];
+    }
   });
 
   return { from: emailFrom, subject, to: emailTo };
@@ -215,8 +258,8 @@ const emailMessageOptions = (headers: gmail_v1.Schema$MessagePartHeader[]) => {
 
 // Function to send email reply
 const sendEmailReply = async (
-  gmail: gmail_v1.Gmail,
   emailId: string,
+  gmail: gmail_v1.Gmail,
   headers: gmail_v1.Schema$MessagePartHeader[],
   parts: gmail_v1.Schema$MessagePart[]
 ) => {
@@ -289,22 +332,30 @@ export async function GET(req: NextRequest, res: NextResponse) {
     });
 
     // Get email details
-    const { id, payload } = await getEmail(gmail);
+    const emailMessage = await getEmailMessage(gmail);
 
-    if (!id || !payload?.parts || !payload?.headers) {
-      throw new Error("Invalid email data");
+    if (!emailMessage?.id || !emailMessage?.payload?.parts || !emailMessage?.payload?.headers) {
+      return new NextResponse(null, {
+        status: 400,
+        statusText: "Invalid email data",
+      });
     }
+
+    const { id, payload: { headers, parts } } = emailMessage
 
     // Send email reply
     const response = await sendEmailReply(
-      gmail,
       id,
-      payload.headers,
-      payload.parts
+      gmail,
+      headers,
+      parts
     );
 
     if (response.status !== 200) {
-      throw new Error("Failed to send email reply");
+      return new NextResponse(null, {
+        status: 500,
+        statusText: "Failed to send email reply",
+      });
     }
 
     return new NextResponse(null, {
@@ -313,6 +364,9 @@ export async function GET(req: NextRequest, res: NextResponse) {
     });
   } catch (error) {
     console.error(error);
-    throw new Error("Internal Server Error");
+    return new NextResponse(null, {
+      status: 500,
+      statusText: "Internal error",
+    });
   }
 }

@@ -14,7 +14,7 @@ const setCredentials = async (code: string, oAuth2Client: any) => {
     type: "authorized_user",
     client_id: CLIENT_ID,
     client_secret: CLIENT_SECRET,
-    refresh_token: tokens.refresh_token,
+    access_token: tokens.access_token,
   });
 
   fs.writeFileSync("./token.json", payload);

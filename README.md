@@ -1,36 +1,104 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Vercel - Gmail API example
 
 ## Getting Started
 
-First, run the development server:
+Clone this repository:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/GeorgiyIzmailov/vercel-gmail-api-example.git
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Setup dependencies:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm install
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+Copy the example env file to make a .env.example for local development:
 
-## Learn More
+```bash
+cp .env.example .env
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Create a Google Cloud project
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Create a project on the GCP platform by going to **Menu** > **IAM & Admin** > **Create Project** in the Google Cloud console. Learn more [here](https://developers.google.com/workspace/guides/create-project#google-cloud-console).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+### Enable the Gmail API
 
-## Deploy on Vercel
+1. In the Google Cloud console, go to **Menu** > **More products** > **Google Workspace** > **Product Library**
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+2. Click on the **Gmail API**
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+3. Click **Enable**
+
+### Configure the OAuth consent screen
+
+1. In the Google Cloud console, go to **Menu** > **APIs & Services** > **OAuth consent screen**
+
+2. For User type select **Internal**, then click **Create**
+
+3. Complete the app registration form, then click **Save and Continue**
+
+4. Set the following scopes:
+
+   - [ https://www.googleapis.com/auth/gmail.readonly ]
+   - [ https://www.googleapis.com/auth/gmail.send ]
+
+5. Click **Save and Continue** and **Bach to Dashboard**
+
+### Authorize credentials for a web application
+
+1. In the Google Cloud console, go to **Menu** > **APIs & Services** > **Credentials**
+
+2. Click **Create Credentials** and select **OAuth Client ID**
+
+3. Click **Application type** > **Web application**
+
+4. In the **Authorized redirect URIs** section, specify the URI for redirection:
+
+```bash
+GCP_REDIRECT_URI="https://<your_domain>/api/authenticate-redirect"
+```
+
+5. Click **Create**. The OAuth client created screen appears, showing your new **Client ID** and **Client secret**
+
+6. Copy and add the **Client ID** and **Client secret** to the `.env` file:
+
+```bash
+GCP_CLIENT_ID="YOUR_GCP_CLIENT_ID"
+GCP_CLIENT_SECRET="YOUR_GCP_CLIENT_SECRET"
+```
+
+7. Click **OK**
+
+### Specify email
+
+Add your email address specified when creating the web client:
+
+```bash
+EMAIL_ADDRESS="YOUR_EMAIL_ADDRESS"
+```
+
+### Inkeep env
+
+Add **API_KEY** and **INTEGRATION_ID** to the environment variables:
+
+```bash
+INKEEP_API_KEY="YOUR_INKEEP_API_KEY"
+INKEEP_INTEGRATION_ID="YOUR_INKEEP_INTEGRATION_ID"
+```
+
+## Run locally
+
+```bash
+pnpm dev
+```
+
+## API Routes
+
+`/api/authenticate` - authorization and initialization of the web client
+
+`/api/authenticate-redirect` - processing of authentication and token retrieval
+
+`/api/send-email-message` - receiving an email and sending a response from AI
