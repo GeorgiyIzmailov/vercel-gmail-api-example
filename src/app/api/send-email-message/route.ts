@@ -246,7 +246,10 @@ const emailMessageOptions = (headers: gmail_v1.Schema$MessagePartHeader[]) => {
       );
 
       if (!foundSupportEmail?.length) {
-        throw new Error("Not found support email");
+        return new NextResponse(null, {
+          status: 400,
+          statusText: "Not found support email",
+        });
       }
 
       emailTo = foundSupportEmail[0];
@@ -331,32 +334,34 @@ export async function GET(req: NextRequest, res: NextResponse) {
       auth: oAuth2Client,
     });
 
-    // Get email details
-    const emailMessage = await getEmailMessage(gmail);
+    setInterval(async () => {
+      // Get email details
+      const emailMessage = await getEmailMessage(gmail);
 
-    if (!emailMessage?.id || !emailMessage?.payload?.parts || !emailMessage?.payload?.headers) {
-      return new NextResponse(null, {
-        status: 400,
-        statusText: "Invalid email data",
-      });
-    }
+      if (!emailMessage?.id || !emailMessage?.payload?.parts || !emailMessage?.payload?.headers) {
+        return new NextResponse(null, {
+          status: 400,
+          statusText: "Invalid email data",
+        });
+      }
 
-    const { id, payload: { headers, parts } } = emailMessage
+      const { id, payload: { headers, parts } } = emailMessage;
 
-    // Send email reply
-    const response = await sendEmailReply(
-      id,
-      gmail,
-      headers,
-      parts
-    );
+      // Send email reply
+      const response = await sendEmailReply(
+        id,
+        gmail,
+        headers,
+        parts
+      );
 
-    if (response.status !== 200) {
-      return new NextResponse(null, {
-        status: 500,
-        statusText: "Failed to send email reply",
-      });
-    }
+      if (response.status !== 200) {
+        return new NextResponse(null, {
+          status: 500,
+          statusText: "Failed to send email reply",
+        });
+      }
+    }, 15000);
 
     return new NextResponse(null, {
       status: 200,
