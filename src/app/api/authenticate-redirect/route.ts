@@ -1,3 +1,4 @@
+import { get } from "@vercel/edge-config";
 import { google } from "googleapis";
 import { NextRequest, NextResponse } from "next/server";
 
