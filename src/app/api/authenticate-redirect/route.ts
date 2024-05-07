@@ -1,4 +1,3 @@
-import { get } from "@vercel/edge-config";
 import { google } from "googleapis";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -13,13 +12,13 @@ const EDGE_CONFIG_ID = process.env.EDGE_CONFIG_ID;
 const VER_API_ACCESS_TOKEN = process.env.VER_API_ACCESS_TOKEN;
 const VER_TEAM_ID = process.env.VER_TEAM_ID;
 
-const setCredentials = async (code: string, oAuth2Client: any) => {
-  const { tokens } = await oAuth2Client.getToken(code);
-  oAuth2Client.setCredentials(tokens);
-
+const setCredentialsInEdgeStore = async (code: string, oAuth2Client: any) => {
   if (!EDGE_CONFIG_ID || !VER_API_ACCESS_TOKEN) {
     throw new Error("Vercel Edge Config ID or Vercel API Token not found");
   }
+
+  const { tokens } = await oAuth2Client.getToken(code);
+  oAuth2Client.setCredentials(tokens);
 
   const payload = {
     type: "authorized_user",
@@ -81,7 +80,7 @@ export async function GET(req: NextRequest, res: NextResponse) {
     );
 
     const code = await getCodeFromURL(req);
-    await setCredentials(code, oAuth2Client);
+    await setCredentialsInEdgeStore(code, oAuth2Client);
 
     return new NextResponse(null, {
       status: 200,
